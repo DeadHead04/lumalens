@@ -1,12 +1,13 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "luma-session-scraper"
 version = "0.1.0"
 description = "API-first Luma event discovery and authorized guest exports"
-license = {file = "LICENSE"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{name = "DeadHead04"}]
 keywords = ["luma", "lu.ma", "events", "scraper", "guest-list", "csv", "cli"]
 classifiers = [
@@ -19,7 +20,7 @@ classifiers = [
 ]
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["httpx>=0.27,<1"]
+dependencies = ["httpx>=0.27,<1", "tzdata>=2024.1"]
 
 [project.optional-dependencies]
 dev = ["build>=1.2,<2"]

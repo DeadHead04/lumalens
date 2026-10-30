@@ -16,7 +16,7 @@ luma-scraper --help
 ```
 
 The `login` extra uses an installed Google Chrome. No separate Chromium download
-is required. The core package only requires httpx. Install the generated wheel
+is required. The core package requires httpx and tzdata. Install the generated wheel
 from `dist/` on another machine with `pip install /path/to/package.whl`.
 
 ## Saved sessions
