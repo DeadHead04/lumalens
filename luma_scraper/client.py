@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qs, quote, urlparse
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
@@ -16,21 +16,42 @@ class LumaError(RuntimeError):
         self.code, self.status = code, status
 
 
+def timezone_info(zone):
+    try:
+        return ZoneInfo(zone)
+    except (ZoneInfoNotFoundError, ValueError, TypeError):
+        raise ValueError("Unknown timezone; use an IANA name such as Asia/Kolkata") from None
+
+
+def paging_options(max_pages, page_size):
+    if type(max_pages) is not int or type(page_size) is not int or not 1 <= page_size <= 100 or max_pages < 1:
+        raise ValueError("page_size must be 1–100 and max_pages a positive integer")
+
+
+def object_value(value):
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise LumaError("SCHEMA_CHANGED", "Expected an object in Luma response")
+    return value
+
+
 def instant(value, zone="UTC"):
     if isinstance(value, datetime):
         result = value
     else:
         result = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return (result if result.tzinfo else result.replace(tzinfo=ZoneInfo(zone))).astimezone(timezone.utc)
+    return (result if result.tzinfo else result.replace(tzinfo=timezone_info(zone))).astimezone(timezone.utc)
 
 
 def window(entries, start=None, end=None, zone="UTC"):
+    timezone_info(zone)
     lo, hi = instant(start, zone) if start else None, instant(end, zone) if end else None
     if lo and hi and lo >= hi:
         raise ValueError("--from must be earlier than --to (exclusive)")
     result = []
     for row in entries:
-        event = row.get("event", row)
+        event = object_value(row.get("event", row))
         date = event.get("start_at") or row.get("start_at")
         if not date:
             if not lo and not hi:
@@ -53,6 +74,8 @@ class LumaClient:
     WEB = "https://luma.com"
 
     def __init__(self, cookies=None, *, timeout=30, retries=3, interval=0.35, transport=None):
+        if type(retries) is not int or retries < 0 or not math.isfinite(timeout) or timeout <= 0 or not math.isfinite(interval) or interval < 0:
+            raise ValueError("Use positive finite timeout, nonnegative interval, and nonnegative integer retries")
         self.http = httpx.Client(cookies=cookies, timeout=timeout, follow_redirects=False, transport=transport,
                                  headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json", "Origin": self.WEB,
                                           "Referer": self.WEB + "/", "x-luma-client-type": "luma-web"})
@@ -88,6 +111,8 @@ class LumaClient:
                             delay = (parsedate_to_datetime(raw) - datetime.now(timezone.utc)).total_seconds()
                         except (ValueError, TypeError):
                             delay = 2 ** attempt
+                    if not math.isfinite(delay):
+                        delay = 2 ** attempt
                     if delay > 60:
                         raise LumaError("RATE_LIMITED", "Server requested a long pause; retry later", response.status_code)
                     time.sleep(max(0, delay))
@@ -116,13 +141,15 @@ class LumaClient:
         if not match:
             raise LumaError("SCHEMA_CHANGED", "Luma page no longer contains expected structured data")
         try:
-            return json.loads(match[1])["props"]["pageProps"]["initialData"]
-        except (ValueError, KeyError):
+            data = json.loads(match[1])["props"]["pageProps"]["initialData"]
+            if not isinstance(data, dict):
+                raise ValueError()
+            return data
+        except (ValueError, KeyError, TypeError):
             raise LumaError("SCHEMA_CHANGED", "Unexpected Luma page data") from None
 
     def paginate(self, path, *, max_pages=100, page_size=100, **params):
-        if not 1 <= page_size <= 100 or max_pages < 1:
-            raise ValueError("page_size must be 1–100 and max_pages positive")
+        paging_options(max_pages, page_size)
         entries, ids, cursors, cursor = [], set(), set(), None
         for page in range(1, max_pages + 1):
             data = self.request(path, pagination_limit=page_size, pagination_cursor=cursor, **params)
@@ -130,7 +157,9 @@ class LumaClient:
             if not isinstance(rows, list) or not isinstance(data.get("has_more"), bool) or any(not isinstance(row, dict) for row in rows):
                 raise LumaError("SCHEMA_CHANGED", "Invalid paginated response; refusing to report an empty success")
             for row in rows:
-                identity = row.get("api_id") or row.get("event", {}).get("api_id") or row.get("user", {}).get("api_id")
+                identity = row.get("api_id") or object_value(row.get("event")).get("api_id") or object_value(row.get("user")).get("api_id")
+                if identity is not None and not isinstance(identity, str):
+                    raise LumaError("SCHEMA_CHANGED", "Invalid entry identifier")
                 if identity is None or identity not in ids:
                     entries.append(row)
                     if identity:
@@ -152,14 +181,22 @@ class LumaClient:
         initial = self._page_data(slug)
         if initial.get("kind") != "discover-place":
             raise LumaError("UNSUPPORTED_CITY", "This city has no Luma discovery page; supply a supported Luma city slug")
-        return initial["data"]["place"]
+        place = object_value(object_value(initial.get("data")).get("place"))
+        if not all(isinstance(place.get(k), str) and place[k] for k in ("api_id", "name")):
+            raise LumaError("SCHEMA_CHANGED", "Missing city identifier or name")
+        return place
 
     def discover(self, city, *, start=None, end=None, zone=None, radius_km=None, max_pages=100, page_size=50):
+        paging_options(max_pages, page_size)
+        if zone is not None:
+            timezone_info(zone)
+        if radius_km is not None and (not math.isfinite(radius_km) or radius_km <= 0):
+            raise ValueError("Radius must be positive and finite")
         place = self.place(city)
         zone = zone or place.get("timezone", "UTC")
         # Discovery has no historical inventory. Never silently claim past coverage.
         window([], start, end, zone)
-        if start and instant(start, zone).astimezone(ZoneInfo(zone)).date() < datetime.now(ZoneInfo(zone)).date():
+        if start and instant(start, zone).astimezone(timezone_info(zone)).date() < datetime.now(timezone_info(zone)).date():
             raise LumaError("HISTORY_UNSUPPORTED", "City discovery only exposes current/upcoming events. Use history for your account's past events.")
         if end and instant(end, zone) <= datetime.now(timezone.utc):
             raise LumaError("HISTORY_UNSUPPORTED", "Past city discovery is unavailable; use account history")
@@ -179,6 +216,8 @@ class LumaClient:
         return data
 
     def history(self, *, period="past", start=None, end=None, zone="UTC", max_pages=100, page_size=50):
+        paging_options(max_pages, page_size)
+        window([], start, end, zone)
         if period not in {"past", "future"}:
             raise ValueError("period must be past or future")
         self.me()
@@ -207,16 +246,18 @@ class LumaClient:
             initial = self._page_data(reference)
             if initial.get("kind") != "event":
                 raise ValueError("URL is not a Luma event")
-            event_id = initial["data"].get("event", {}).get("api_id") or initial["data"].get("api_id")
+            data = object_value(initial.get("data"))
+            event_id = object_value(data.get("event")).get("api_id") or data.get("api_id")
         if not event_id:
             raise LumaError("SCHEMA_CHANGED", "Event ID missing")
         details = self.request("/event/get", event_api_id=event_id, referring_ticket_key=ticket)
-        ticket = ticket or (details.get("guest_data") or {}).get("ticket_key")
+        ticket = ticket or object_value(details.get("guest_data")).get("ticket_key")
         return event_id, ticket, details
 
     def guests(self, reference, *, max_pages=100, page_size=100):
+        paging_options(max_pages, page_size)
         event_id, ticket, details = self.event(reference)
         result = self.paginate("/event/get-guest-list", event_api_id=event_id, ticket_key=ticket, max_pages=max_pages, page_size=page_size)
-        result.update(event_api_id=event_id, event_name=details.get("event", {}).get("name"), count=len(result["entries"]),
+        result.update(event_api_id=event_id, event_name=object_value(details.get("event")).get("name"), count=len(result["entries"]),
                       coverage="Only guest fields visible to this session or ticket; hidden contact details are not available")
         return result

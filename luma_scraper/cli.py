@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-from .client import LumaClient, LumaError
+from .client import LumaClient, LumaError, object_value
 from .sessions import chrome_session, load_session, login
 
 
@@ -22,10 +22,10 @@ def csv_text(result):
     rows = []
     for entry in result.get("entries", []):
         if "user" in entry:
-            row = {"guest_api_id": entry.get("api_id"), **entry["user"], "section_label": entry.get("section_label"),
+            row = {"guest_api_id": entry.get("api_id"), **object_value(entry["user"]), "section_label": entry.get("section_label"),
                    "num_tickets_registered": entry.get("num_tickets_registered")}
         else:
-            row = dict(entry.get("event", entry))
+            row = dict(object_value(entry.get("event", entry)))
             for key in ("ticket_info", "registration_availability", "guest_info"):
                 if key in entry:
                     row[key] = entry[key]
@@ -45,15 +45,22 @@ def output(result, path=None, format="json"):
         return
     destination = Path(path).expanduser()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", newline="") as f:
-        f.write(text)
+    payloads = [(destination, text)]
     if format == "csv":
-        # CSV cannot carry coverage/truncation metadata: retain a JSON sidecar.
         meta = destination.with_suffix(destination.suffix + ".meta.json")
-        fd = os.open(meta, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "w") as f:
-            json.dump({k: v for k, v in result.items() if k != "entries"}, f, indent=2)
+        payloads.append((meta, json.dumps({k: v for k, v in result.items() if k != "entries"}, indent=2)))
+    created = []
+    try:
+        for target, content in payloads:
+            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            created.append(target)
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+                f.write(content)
+    except BaseException:
+        # Remove only files this invocation created; preserve pre-existing files.
+        for target in created:
+            target.unlink(missing_ok=True)
+        raise
     print(f"Saved {result.get('count', len(result.get('entries', [])))} records to {destination}", file=sys.stderr)
 
 
@@ -113,7 +120,7 @@ def main(argv=None):
                 else:
                     if bool(args.event) == bool(args.event_file):
                         raise ValueError("Supply exactly one of --event or --event-file")
-                    reference = Path(args.event_file).expanduser().read_text().strip() if args.event_file else args.event
+                    reference = Path(args.event_file).expanduser().read_text(encoding="utf-8").strip() if args.event_file else args.event
                     result = client.guests(reference, **paging)
             output(result, args.out, args.format)
             if result.get("complete") is False:

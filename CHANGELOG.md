@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1 — 2026-10-30
+
+- LumaLens branding and repository metadata in release artifacts.
+- UTF-8 file handling for international names and BOM-prefixed session exports.
+- Clean errors for unknown timezones, invalid pagination/radius parameters, and login browser failures.
+- CSV/metadata write failures now remove only newly created files, preserving existing exports.
+- Better handling of malformed API responses and cookie files.
+- Expanded offline regression suite and live verification across four cities, account history, and guest exports.
+- Fresh-wheel installation and source-archive checks documented in the verification report.
+
 ## 0.1.0 — 2026-10-30
 
 Initial public release:

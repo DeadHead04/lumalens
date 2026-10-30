@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "luma-session-scraper"
-version = "0.1.0"
+version = "0.1.1"
 description = "API-first Luma event discovery and authorized guest exports"
 license = "MIT"
 license-files = ["LICENSE"]

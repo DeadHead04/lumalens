@@ -1,5 +1,6 @@
 """Scoped session import. Credentials never appear in diagnostics."""
 import json
+import math
 import os
 import sys
 import time
@@ -14,7 +15,7 @@ def is_luma_domain(domain):
 
 def load_session(path):
     """Read Playwright storageState, browser cookie JSON, or Netscape cookies."""
-    text = Path(path).expanduser().read_text()
+    text = Path(path).expanduser().read_text(encoding="utf-8-sig")
     cookies = httpx.Cookies()
     if text.lstrip().startswith(("{", "[")):
         data = json.loads(text)
@@ -47,7 +48,12 @@ def load_session(path):
         name, value = c.get("name"), c.get("value")
         if not isinstance(name, str) or not isinstance(value, str):
             raise ValueError("Invalid cookie name/value")
-        cookies.set(name, value, domain=domain, path=c.get("path", "/"))
+        path_ = c.get("path", "/")
+        if not name or any(ch in name + value for ch in "\r\n") or not isinstance(path_, str) or not path_.startswith("/"):
+            raise ValueError("Invalid cookie name, value, or path")
+        if expires is not None and not math.isfinite(expires):
+            raise ValueError("Invalid cookie expiry")
+        cookies.set(name, value, domain=domain, path=path_)
     # Luma's web session cookie is shared by its web and API clients across domains.
     auth = [c.value for c in cookies.jar if c.name == "luma.auth-session-key"]
     if auth:
@@ -74,7 +80,7 @@ def chrome_session(profile="Default", chrome_root=None):
         raise ValueError("Provide chrome_root for this platform")
     state = root / "Local State"
     if state.exists():
-        info = json.loads(state.read_text()).get("profile", {}).get("info_cache", {})
+        info = json.loads(state.read_text(encoding="utf-8-sig")).get("profile", {}).get("info_cache", {})
         matches = [k for k, v in info.items() if profile.casefold() in {k.casefold(), v.get("name", "").casefold(), v.get("user_name", "").casefold()}]
         if len(matches) > 1:
             raise ValueError("Ambiguous Chrome profile; use its Profile N directory name")
@@ -106,39 +112,44 @@ def save_private_json(path, data):
     path = Path(path).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
 def login(path, timeout=300):
     """User signs in interactively in an isolated Chrome window."""
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright, Error as BrowserError
     from .client import LumaClient, LumaError
+    if timeout <= 0:
+        raise ValueError("Login timeout must be positive")
     if Path(path).expanduser().exists():
         raise ValueError("Session file already exists; choose a new filename")
-    with sync_playwright() as p:
-        browser = p.chromium.launch(channel="chrome", headless=False)
-        try:
-            context = browser.new_context()
-            page = context.new_page()
-            page.goto("https://luma.com/signin")
-            print("Sign in to Luma in the new Chrome window. Waiting for a verified session…", file=sys.stderr)
-            deadline = time.monotonic() + timeout
-            while time.monotonic() < deadline:
-                rows = [c for c in context.cookies() if is_luma_domain(c["domain"])]
-                auth = next((c for c in rows if c["name"] == "luma.auth-session-key"), None)
-                if auth:
-                    cookies = httpx.Cookies()
-                    cookies.set(auth["name"], auth["value"], domain="api.lu.ma")
-                    try:
-                        with LumaClient(cookies=cookies) as client:
-                            client.me()
-                    except LumaError:
-                        pass
-                    else:
-                        save_private_json(path, {"cookies": rows, "origins": []})
-                        return
-                page.wait_for_timeout(1500)
-            raise ValueError("Login timed out; no session saved")
-        finally:
-            browser.close()
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(channel="chrome", headless=False)
+            try:
+                context = browser.new_context()
+                page = context.new_page()
+                page.goto("https://luma.com/signin")
+                print("Sign in to Luma in the new Chrome window. Waiting for a verified session…", file=sys.stderr)
+                deadline = time.monotonic() + timeout
+                while time.monotonic() < deadline:
+                    rows = [c for c in context.cookies() if is_luma_domain(c["domain"])]
+                    auth = next((c for c in rows if c["name"] == "luma.auth-session-key"), None)
+                    if auth:
+                        cookies = httpx.Cookies()
+                        cookies.set(auth["name"], auth["value"], domain="api.lu.ma")
+                        try:
+                            with LumaClient(cookies=cookies) as client:
+                                client.me()
+                        except LumaError:
+                            pass
+                        else:
+                            save_private_json(path, {"cookies": rows, "origins": []})
+                            return
+                    page.wait_for_timeout(1500)
+                raise ValueError("Login timed out; no session saved")
+            finally:
+                browser.close()
+    except BrowserError:
+        raise ValueError("Login browser failed or was closed. Install Google Chrome and retry login on a graphical desktop.") from None

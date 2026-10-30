@@ -20,7 +20,7 @@ The package is distributed through this repository and GitHub Releases. It is **
 You can install a downloaded release wheel without cloning. Replace the filename with the wheel you downloaded:
 
 ```sh
-python -m pip install './luma_session_scraper-0.1.0-py3-none-any.whl[login]'
+python -m pip install './luma_session_scraper-0.1.1-py3-none-any.whl[login]'
 ```
 
 ## Interactive login

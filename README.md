@@ -120,6 +120,7 @@ Check `complete` before treating a result as a complete collection. The default 
 - [Troubleshooting](docs/troubleshooting.md)
 - [Contributing and development](CONTRIBUTING.md)
 - [Security and private data](SECURITY.md)
+- [Release verification report](docs/verification.md)
 - [Changelog](CHANGELOG.md)
 - [Release downloads](https://github.com/DeadHead04/lumalens/releases)
 
