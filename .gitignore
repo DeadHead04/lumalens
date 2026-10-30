@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+.sessions/
+exports/
+*.cookies.json
+storage-state*.json
+.DS_Store
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.coverage
+htmlcov/
