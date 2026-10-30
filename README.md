@@ -1,10 +1,10 @@
-# Luma Scraper — Python API & CLI
+# LumaLens — Luma Event Discovery & Guest Exports
 
-[![Tests](https://github.com/DeadHead04/luma-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/DeadHead04/luma-scraper/actions/workflows/ci.yml)
+[![Tests](https://github.com/DeadHead04/lumalens/actions/workflows/ci.yml/badge.svg)](https://github.com/DeadHead04/lumalens/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Find upcoming Luma (lu.ma) events, download your event history, and export guest lists your account can access.** An API-first Python package and command-line tool with reusable login sessions, pagination, date filters, and JSON/CSV exports.
+**LumaLens helps you find upcoming Luma (lu.ma) events, download your event history, and export guest lists your account can access.** An API-first Python package and command-line tool with reusable login sessions, pagination, date filters, and JSON/CSV exports.
 
 No API key is needed. Public discovery works without login. For private account data, each person signs into their own Luma account once and keeps the session on their own computer.
 
@@ -30,8 +30,8 @@ You need **Python 3.11+**, **Git**, and **Google Chrome** for interactive login.
 **macOS / Linux**
 
 ```sh
-git clone https://github.com/DeadHead04/luma-scraper.git
-cd luma-scraper
+git clone https://github.com/DeadHead04/lumalens.git
+cd lumalens
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install '.[login]'
@@ -40,8 +40,8 @@ python -m pip install '.[login]'
 **Windows PowerShell**
 
 ```powershell
-git clone https://github.com/DeadHead04/luma-scraper.git
-cd luma-scraper
+git clone https://github.com/DeadHead04/lumalens.git
+cd lumalens
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install ".[login]"
 ```
@@ -121,7 +121,7 @@ Check `complete` before treating a result as a complete collection. The default 
 - [Contributing and development](CONTRIBUTING.md)
 - [Security and private data](SECURITY.md)
 - [Changelog](CHANGELOG.md)
-- [Release downloads](https://github.com/DeadHead04/luma-scraper/releases)
+- [Release downloads](https://github.com/DeadHead04/lumalens/releases)
 
 ## Limits to understand
 

@@ -5,8 +5,8 @@ Bug reports, documentation fixes, compatibility fixes, and focused pull requests
 ## Development setup
 
 ```sh
-git clone https://github.com/DeadHead04/luma-scraper.git
-cd luma-scraper
+git clone https://github.com/DeadHead04/lumalens.git
+cd lumalens
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev,login]'

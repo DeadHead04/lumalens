@@ -28,10 +28,10 @@ chrome = ["browser-cookie3>=0.20,<1"]
 login = ["playwright>=1.48,<2"]
 
 [project.urls]
-Homepage = "https://github.com/DeadHead04/luma-scraper"
-Documentation = "https://github.com/DeadHead04/luma-scraper#readme"
-Issues = "https://github.com/DeadHead04/luma-scraper/issues"
-Changelog = "https://github.com/DeadHead04/luma-scraper/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/DeadHead04/lumalens"
+Documentation = "https://github.com/DeadHead04/lumalens#readme"
+Issues = "https://github.com/DeadHead04/lumalens/issues"
+Changelog = "https://github.com/DeadHead04/lumalens/blob/main/CHANGELOG.md"
 
 [project.scripts]
 luma-scraper = "luma_scraper.cli:main"
